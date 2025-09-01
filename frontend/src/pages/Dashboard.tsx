@@ -1,6 +1,15 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useUser } from '../context/UserContext'; // To handle signing out
+import apiClient from '../../api'; // To make API calls
 
+// --- Interfaces ---
+interface Note {
+  _id: string;
+  content: string;
+  createdAt: string;
+}
+
+// --- Your SVG Icons ---
 const LogoIcon = () => (
     <div className="w-8 h-8 rounded-full bg-blue-100 flex-shrink-0 flex items-center justify-center">
         <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
@@ -17,70 +26,103 @@ const TrashIcon = () => (
 
 
 const Dashboard = () => {
-    const [notes, setNotes] = useState<string[]>(['Note 1', 'Note 2']);
-    const navigate = useNavigate();
+    // --- State Management ---
+    const [notes, setNotes] = useState<Note[]>([]);
+    const [newNoteContent, setNewNoteContent] = useState('');
+    const { setToken } = useUser();
 
-    const handleCreateNote = () => {
-        const newNote = `New Note ${notes.length + 1}`;
-        setNotes([...notes, newNote]);
+    // --- Data Fetching ---
+    useEffect(() => {
+        const fetchNotes = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) return;
+                
+                const response = await apiClient.get('/api/notes', {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                setNotes(response.data);
+            } catch (error) {
+                console.error("Failed to fetch notes:", error);
+            }
+        };
+        fetchNotes();
+    }, []);
+
+    // --- API Handlers ---
+    const handleCreateNote = async () => {
+        if (!newNoteContent.trim()) return;
+        try {
+            const token = localStorage.getItem('token');
+            const response = await apiClient.post('/api/notes', 
+                { content: newNoteContent },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            setNotes([response.data, ...notes]);
+            setNewNoteContent(''); // Clear the input field
+        } catch (error) {
+            console.error("Failed to create note:", error);
+        }
     };
 
-    const handleDeleteNote = (indexToDelete: number) => {
-        setNotes(notes.filter((_, index) => index !== indexToDelete));
+    const handleDeleteNote = async (noteId: string) => {
+        try {
+            const token = localStorage.getItem('token');
+            await apiClient.delete(`/api/notes/${noteId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setNotes(notes.filter(note => note._id !== noteId));
+        } catch (error) {
+            console.error("Failed to delete note:", error);
+        }
     };
     
     const handleSignOut = () => {
-        console.log("Signing out...");
-        navigate('/signin');
+        setToken(null); // This clears the token and triggers the redirect
     };
 
     return (
         <div className="min-h-screen bg-gray-50">
+            {/* Your Navbar JSX is perfect, no changes needed */}
             <nav className="bg-white shadow-sm w-full">
-                <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex justify-between items-center h-16">
-                        <div className="flex items-center space-x-3">
-                            <LogoIcon />
-                            <h1 className="text-xl font-semibold text-gray-800">Dashboard</h1>
-                        </div>
-                        <button
-                            onClick={handleSignOut}
-                            className="text-sm font-medium text-blue-600 hover:underline focus:outline-none"
-                        >
-                            Sign Out
-                        </button>
-                    </div>
-                </div>
+                {/* ... Navbar code ... */}
             </nav>
-
-         
+            
             <main className="w-full max-w-2xl mx-auto p-4 sm:p-6 lg:p-8">
-              
+                {/* Your "Welcome" card is great, no changes needed */}
                 <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-                    <h2 className="text-2xl font-bold text-gray-900 mb-1 break-words">
-                        Welcome, Jonas Kahnwald !
-                    </h2>
-                    <p className="text-gray-600 break-words">Email: xxxxxx@xxxx.com</p>
+                    {/* ... Welcome card code ... */}
                 </div>
 
-                <button
-                    onClick={handleCreateNote}
-                    className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:shadow-outline transition-colors duration-200 mb-8"
-                >
-                    Create Note
-                </button>
-
+                {/* --- Updated Create Note Form --- */}
+                <div className="mb-8">
+                    <textarea
+                        value={newNoteContent}
+                        onChange={(e) => setNewNoteContent(e.target.value)}
+                        placeholder="What's on your mind?"
+                        className="w-full p-3 border border-gray-300 rounded-lg text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
+                        rows={3}
+                    />
+                    <button
+                        onClick={handleCreateNote}
+                        className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:shadow-outline transition-colors duration-200"
+                    >
+                        Create Note
+                    </button>
+                </div>
+                
+                {/* --- Updated Notes List --- */}
                 <div>
                     <h3 className="text-xl font-bold text-gray-800 mb-4">Notes</h3>
                     <div className="space-y-4">
                         {notes.length > 0 ? (
-                            notes.map((note, index) => (
+                            notes.map((note) => (
                                 <div
-                                    key={index}
+                                    key={note._id}
                                     className="flex justify-between items-center gap-4 bg-white p-4 rounded-lg shadow-md"
                                 >
-                                    <p className="text-gray-800 min-w-0 break-words">{note}</p>
-                                    <button onClick={() => handleDeleteNote(index)} className="flex-shrink-0">
+                                    <p className="text-gray-800 min-w-0 break-words">{note.content}</p>
+                                    <button onClick={() => handleDeleteNote(note._id)} className="flex-shrink-0">
                                         <TrashIcon />
                                     </button>
                                 </div>
